@@ -4,7 +4,7 @@ import sha1 from "sha1";
 
 class UsersController {
   static postNew(request, response) {
-    const { email, password } = request.body
+    const { email, password } = request.body;
 
     if (!email) {
       return response.status(400).json({ error: "Missing email" });
@@ -39,4 +39,4 @@ class UsersController {
   }
 }
 
-module.exports = UsersController
+module.exports = UsersController;
