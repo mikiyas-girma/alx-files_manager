@@ -23,7 +23,7 @@ class RedisClient {
   }
 
   async set(key, value, duration) {
-    const redisSetex = promisify(this.redis.setex).bind(this.redis);
+    const redisSetex = promisify(this.redis.SETEX).bind(this.redis);
     await redisSetex(key, duration, value);
   }
 
