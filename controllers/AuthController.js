@@ -44,7 +44,7 @@ class AuthController {
 
     if (userId) {
       await redisClient.del(key);
-      response.status(204).json({});
+      response.status(204).json({})
     } else {
       response.status(401).json({ error: "Unauthorized" });
     }
