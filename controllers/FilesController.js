@@ -3,6 +3,7 @@ import redisClient from "../utils/redis";
 import { v4 as uuidv4 } from "uuid";
 import { ObjectID } from "mongodb";
 import { promises as fs } from "fs";
+import mime from "mime-types";
 
 class FilesController {
   static async getUser(request) {
@@ -232,6 +233,59 @@ class FilesController {
     );
 
     return null;
+  }
+
+  static async getFile(request, response) {
+    const { id } = request.params;
+    const files = dbClient.db.collection("files");
+    const idObject = new ObjectID(id);
+    files.findOne({ _id: idObject }, async (err, file) => {
+      if (!file) {
+        return response.status(404).json({ error: "Not found" });
+      }
+      if (file.isPublic) {
+        if (file.type === "folder") {
+          return response
+            .status(400)
+            .json({ error: "A folder doesn't have content" });
+        }
+        try {
+          let fileName = file.localPath;
+          const data = fs.readFile(fileName);
+          const contentType = mime.contentType(file.name);
+          return response
+            .header("Content-Type", contentType)
+            .status(200)
+            .send(data);
+        } catch (error) {
+          return response.status(404).json({ error: "Not found" });
+        }
+      } else {
+        const user = await FilesController.getUser(request);
+        if (!user) {
+          return response.status(404).json({ error: "Not found" });
+        }
+        if (file.userId.toString() === user._id.toString()) {
+          if (file.type === "folder") {
+            return response
+              .status(400)
+              .json({ error: "A folder doesn't have content" });
+          }
+          try {
+            let fileName = file.localPath;
+            const contentType = mime.contentType(file.name);
+            return response
+              .header("Content-Type", contentType)
+              .status(200)
+              .sendFile(fileName);
+          } catch (error) {
+            return response.status(404).json({ error: "Not found" });
+          }
+        } else {
+          return response.status(404).json({ error: "Not found" });
+        }
+      }
+    });
   }
 }
 
