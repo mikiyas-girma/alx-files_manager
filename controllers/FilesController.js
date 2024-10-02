@@ -251,8 +251,11 @@ class FilesController {
         }
         try {
           let fileName = file.localPath;
-          const data = fs.readFile(fileName);
+          //   console.log("public filename: ". fileName)
+          const data = await fs.readFile(fileName);
+          //   console.log("public data: ", data)
           const contentType = mime.contentType(file.name);
+          //   console.log("public contentType: ", contentType)
           return response
             .header("Content-Type", contentType)
             .status(200)
@@ -273,11 +276,13 @@ class FilesController {
           }
           try {
             let fileName = file.localPath;
+            const data = await fs.readFile(fileName);
             const contentType = mime.contentType(file.name);
+            // console.log("here with no data")
             return response
               .header("Content-Type", contentType)
               .status(200)
-              .sendFile(fileName);
+              .send(data);
           } catch (error) {
             return response.status(404).json({ error: "Not found" });
           }
