@@ -6,6 +6,10 @@ import { v4 as uuidv4 } from "uuid";
 class AuthController {
   static async getConnect(request, response) {
     const authData = request.header("Authorization");
+    if (!authData) {
+        response.status(401).json({ error: "Unauthorized" });
+        return null;
+    }
     let credentials = authData.split(" ")[1];
     const credentialsBuffer = Buffer.from(credentials, "base64");
     credentials = credentialsBuffer.toString("ascii");
