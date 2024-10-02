@@ -4,6 +4,15 @@ import { v4 as uuidv4 } from "uuid";
 import { ObjectID } from "mongodb";
 import { promises as fs } from "fs";
 import mime from "mime-types";
+import Queue from "bull";
+
+// Add the Bull queue initialization
+const fileQueue = new Queue("fileQueue", {
+  redis: {
+    host: process.env.REDIS_HOST || "localhost",
+    port: process.env.REDIS_PORT || 6379,
+  },
+});
 
 class FilesController {
   static async getUser(request) {
@@ -14,7 +23,7 @@ class FilesController {
     if (userId) {
       const users = dbClient.db.collection("users");
       const idObject = new ObjectID(userId);
-      const user = users.findOne({ _id: idObject });
+      const user = await users.findOne({ _id: idObject });
 
       if (!user) {
         return null;
@@ -47,13 +56,13 @@ class FilesController {
     const files = dbClient.db.collection("files");
     if (parentId) {
       const idObject = new ObjectID(parentId);
-      const file = files.findOne({ _id: idObject, userId: user._id });
+      const file = await files.findOne({ _id: idObject, userId: user._id });
 
       if (!file) {
         return response.status(400).json({ error: "Parent not found" });
       }
       if (file.type !== "folder") {
-        return response.status(400).json({ error: "Parent is not a folder" });
+        return response.status(400).json({ error: "Parent is notttt a folder" });
       }
     }
     if (type === "folder") {
@@ -94,28 +103,35 @@ class FilesController {
         console.log(error);
       }
 
-      files
-        .insertOne({
+      try {
+        const result = await files.insertOne({
           userId: user._id,
           name,
           type,
           isPublic,
           parentId: parentId || 0,
           localPath: fileName,
-        })
-        .then((result) => {
-          response.status(201).json({
-            id: result.insertedId,
-            userId: user._id,
-            name,
-            type,
-            isPublic,
-            parentId: parentId || 0,
-          });
-        })
-        .catch((error) => {
-          console.log(error);
         });
+
+        if (type.startsWith("image")) {
+          await fileQueue.add({
+            userId: user._id,
+            fileId: result.insertedId.toString(),
+          });
+        }
+
+        return response.status(201).json({
+          id: result.insertedId,
+          userId: user._id,
+          name,
+          type,
+          isPublic,
+          parentId: parentId || 0,
+        });
+      } catch (error) {
+        console.log(error);
+        return response.status(500).json({ error: "Internal Server Error" });
+      }
     }
     return null;
   }
@@ -237,8 +253,15 @@ class FilesController {
 
   static async getFile(request, response) {
     const { id } = request.params;
+    const size = request.query.size;
+
+    if (size && !["100", "250", "500"].includes(size)) {
+      return response.status(400).json({ error: "Invalid size parameter" });
+    }
+
     const files = dbClient.db.collection("files");
     const idObject = new ObjectID(id);
+
     files.findOne({ _id: idObject }, async (err, file) => {
       if (!file) {
         return response.status(404).json({ error: "Not found" });
@@ -249,6 +272,7 @@ class FilesController {
             .status(400)
             .json({ error: "A folder doesn't have content" });
         }
+
         try {
           let fileName = file.localPath;
           //   console.log("public filename: ". fileName)
@@ -268,21 +292,35 @@ class FilesController {
         if (!user) {
           return response.status(404).json({ error: "Not found" });
         }
+
         if (file.userId.toString() === user._id.toString()) {
           if (file.type === "folder") {
             return response
               .status(400)
               .json({ error: "A folder doesn't have content" });
           }
+
           try {
             let fileName = file.localPath;
-            const data = await fs.readFile(fileName);
-            const contentType = mime.contentType(file.name);
-            // console.log("here with no data")
-            return response
-              .header("Content-Type", contentType)
-              .status(200)
-              .send(data);
+
+            if (size && file.type.startsWith("image")) {
+              fileName = `${fileName}_${size}`;
+            }
+
+            try {
+                const contentType = mime.contentType(file.name);
+                if (!contentType) {
+                    return response.status(400).json({ error: "Invalid file type" });
+                }
+              const data = await fs.promises.readFile(fileName);
+              return response
+                .header("Content-Type", contentType)
+                .status(200)
+                .send(data);
+            } catch (error) {
+              // thumbnail doesn't exist return 404
+              return response.status(404).json({ error: "Not found" });
+            }
           } catch (error) {
             return response.status(404).json({ error: "Not found" });
           }
