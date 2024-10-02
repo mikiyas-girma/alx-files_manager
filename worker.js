@@ -15,6 +15,13 @@ const fileQueue = new Queue('fileQueue', {
     }
   });
 
+const userQueue = new Queue('userQueue', {
+    redis: {
+      host: 'localhost',
+      port: 6379,
+    }
+  });
+
 const generateThumbnail = async (filePath, size) => {
   try {
     const thumbnail = await imgThumbnail(filePath, {
@@ -73,3 +80,27 @@ fileQueue.process(async (job) => {
     throw error;
   }
 });
+
+
+userQueue.process(async (job) => {
+    const { userId } = job.data;
+    
+    if (!userId) {
+        throw new Error("Missing userId");
+    }
+    
+    try {
+        const users = dbClient.db.collection("users");
+        const user = await users.findOne({ _id: ObjectID(userId) });
+    
+        if (!user) {
+        throw new Error("User not found");
+        }
+        // todo: send welcome email using sendgrid or mailgun or whatever
+        console.log(`Welcome email sent to ${user.email}`);
+        return { status: "success" };
+    } catch (error) {
+        console.log("User not found", error);
+        throw error;
+    }
+    });

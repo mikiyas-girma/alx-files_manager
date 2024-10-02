@@ -2,6 +2,9 @@ import dbClient from "../utils/db";
 import redisClient from "../utils/redis";
 import sha1 from "sha1";
 import { ObjectID } from "mongodb";
+import Queue from "bull";
+
+const userQueue = new Queue("userQueue");
 
 class UsersController {
   static postNew(request, response) {
@@ -27,6 +30,11 @@ class UsersController {
             password: hashed_password,
           })
           .then((result) => {
+            
+            userQueue.add({
+              userId: result.insertedId,
+            });
+
             response.status(201).json({
               id: result.insertedId,
               email,
