@@ -24,9 +24,11 @@ class DBClient {
   }
 
   isAlive() {
-    return this.client.isConnected();
+    return (
+      this.client && this.client.topology && this.client.topology.isConnected()
+    );
   }
-  
+
   async nbUsers() {
     const users = this.db.collection("users");
     const tot_users = await users.countDocuments();
